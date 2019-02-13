@@ -17,10 +17,10 @@ Download the latest version of GraphQL plugin for Neo4j:
 curl -s https://api.github.com/repos/neo4j-graphql/neo4j-graphql/releases/latest | grep browser_download_url | cut -d '"' -f 4 | xargs wget -O /var/lib/neo4j/plugins
 ```
 
-Add this two lines in `/etc/neo4j.conf`
+Add extra configuration rules to `/etc/neo4j.conf`
 ```
-dbms.unmanaged_extension_classes=org.neo4j.graphql=/graphql
-dbms.security.procedures.unrestricted=graphql.*
+echo "dbms.unmanaged_extension_classes=org.neo4j.graphql=/graphql" >> /etc/neo4j.conf
+echo "dbms.security.procedures.unrestricted=graphql.*" >> /etc/neo4j.conf
 ```
 
 To start the server run:
@@ -28,9 +28,9 @@ To start the server run:
 $ sudo neo4j start
 ```
 
-To set username and password for database login with default credentials `neo4j:neo4j` and execute this procedure:
+Set new password for user neo4j:
 ```
-CALL dbms.security.createUser(username, password, false)
+echo "CALL dbms.security.changePassword('<new-password>');"  | cypher-shell -u neo4j -p neo4j
 ```
 
 ### Setup Yii2
@@ -50,11 +50,13 @@ Install the editor with:
 $ git clone https://github.com/slothking-online/graphql-editor
 $ cd graphql-editor
 $ npm i
-$ npm run start
+$ cd ..
+$ chmod +x graphql-editor.sh
 ```
 
 ### GraphiQL
 To easily create query and mutations you can use the tool provided here:
+
 
 ### Prepare Yii integration with
 To prepare your environment stack execute this:
