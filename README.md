@@ -9,16 +9,16 @@ Use this stack to create powerful web application with Yii2 framework and a Neo4
 #### Dependecies
 Install required dependencies:
 ```
-sudo dnf install composer
-sudo dnf install node
-npm install electron -g
-npm install yarn -g
+$ sudo dnf install composer
+$ sudo dnf install node
+$ npm install electron -g
+$ npm install yarn -g
 ```
 
 ## Automatic environment configuration
 ```
 $ chmod +x configure.sh
-$ sudo ./configure.sh
+$ sudo ./configure.sh  <db-password> <yiimode:basic|advanced> <app-name>
 ```
 
 ## Manual environment configuration
@@ -75,14 +75,67 @@ $ chmod +x graphql-playground.sh
 $ ./graphql-playground.sh
 ```
 
-### Prepare Yii integration with
-To prepare your environment stack execute this:
+### Prepare Yii integration with GraphQL
+To prepare your environment add these parameters to `<app-name>/config/params.php`:
 ```
-$ TODO
+return [
+
+    [...]
+
+    'api_endpoint' => 'http://localhost:7474/graphql/',
+    'db_username' => "neo4j",
+    'db_password' => "neo4j",
+];
+```
+
+And execute this script:
+```
+$ mkdir <app-name>/helpers
+$ cp GraphDatabaseAccessLayer.php <app-name>/helpers/GraphDatabaseAccessLayer.php
+$ cd <app-name>
+$ composer require guzzlehttp/guzzle
 ```
 
 ### Remove current .git project
 Remove current .git directory to make space to production git project:
 ```
 $ rm -rf .git
+```
+
+## Example
+Load test data to database and implement this example class:
+```
+
+<?php
+
+namespace app\controllers;
+
+use Yii;
+use yii\helpers\Json;
+[...]
+
+# Use the GraphDatabaseAccessLayer
+use app\helpers\GraphDatabaseAccessLayer as GDAL;
+
+class SiteController extends Controller
+{
+
+	[...]
+
+	public function actionMyGraph() {
+
+		$result = [];
+
+		// Fetch all movies title from graph database
+        $movies = GDAL::query("{ Movie{ title } }")['data']['Movie'];
+        
+        // Adds random values to each film using title as key
+        foreach($movies as $movie) {
+            $result[$movie['title']] = Yii::$app->security->generateRandomString(5);
+        }
+
+        return Json::encode($result);
+
+    }
+
 ```

@@ -18,10 +18,15 @@ neo4j start
 echo "CALL dbms.security.changePassword('$DB_PASSWD');"  | cypher-shell -u neo4j -p neo4j
 
 # Create Yii project
-$ composer create-project --prefer-dist yiisoft/yii2-app-$YII_MODE $APPNAME
+composer create-project --prefer-dist yiisoft/yii2-app-$YII_MODE $APPNAME
 
-# Create Yii middleware to GraphQL
-# TODO
+# Create Yii DAL to GraphQL API
+cp params.php $APPNAME/config/params.php
+mkdir $APPNAME/helpers
+cp GraphDatabaseAccessLayer.php $APPNAME/helpers/GraphDatabaseAccessLayer.php
+cd $APPNAME
+composer require guzzlehttp/guzzle
+cd ..
 
 # Remove .git directory
 rm -rf .git
