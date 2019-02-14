@@ -117,25 +117,24 @@ use yii\helpers\Json;
 # Use the GraphDatabaseAccessLayer
 use app\helpers\GraphDatabaseAccessLayer as GDAL;
 
-class SiteController extends Controller
-{
+class SiteController extends Controller {
 
-	[...]
+    [...]
 
-	public function actionMyGraph() {
+    public function actionMyGraph() {
 
-		$result = [];
+        $result = [];
 
-		// Fetch all movies title from graph database
+        // Fetch all movies title from graph database
         $movies = GDAL::query("{ Movie{ title } }")['data']['Movie'];
-        
+
         // Adds random values to each film using title as key
         foreach($movies as $movie) {
             $result[$movie['title']] = Yii::$app->security->generateRandomString(5);
         }
 
-        return Json::encode($result);
+    return Json::encode($result);
 
-    }
+}
 
 ```
