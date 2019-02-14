@@ -114,7 +114,7 @@ use Yii;
 use yii\helpers\Json;
 [...]
 
-# Use the GraphDatabaseAccessLayer
+// Use the GraphDatabaseAccessLayer
 use app\helpers\GraphDatabaseAccessLayer as GDAL;
 
 class SiteController extends Controller {
