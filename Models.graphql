@@ -1,0 +1,108 @@
+type Movie {
+    _id: Long
+    tagline: String
+    title: String
+    released: Long
+    directed(
+        born: Long
+        name: String
+        borns: [Long]
+        names: [String]
+        orderBy: [_PersonOrdering]
+        filter: _PersonFilter
+    ): Person
+    produced(
+        born: Long
+        name: String
+        borns: [Long]
+        names: [String]
+        orderBy: [_PersonOrdering]
+        filter: _PersonFilter
+    ): Person
+    actedIn(
+        born: Long
+        name: String
+        borns: [Long]
+        names: [String]
+        orderBy: [_PersonOrdering]
+        filter: _PersonFilter
+        _id: Long
+        _ids: [Long]
+        first: Int
+        offset: Int
+    ): [Person]
+    wrote(
+        born: Long
+        name: String
+        borns: [Long]
+        names: [String]
+        orderBy: [_PersonOrdering]
+        filter: _PersonFilter
+    ): Person
+    reviewed(
+        born: Long
+        name: String
+        borns: [Long]
+        names: [String]
+        orderBy: [_PersonOrdering]
+        filter: _PersonFilter
+    ): Person
+}
+
+type Person {
+    _id: Long
+    born: Long
+    name: String
+    actedIn(
+        tagline: String
+        title: String
+        released: Long
+        taglines: [String]
+        titles: [String]
+        releaseds: [Long]
+        orderBy: [_MovieOrdering]
+        filter: _MovieFilter
+    ): Movie
+    wrote(
+        tagline: String
+        title: String
+        released: Long
+        taglines: [String]
+        titles: [String]
+        releaseds: [Long]
+        orderBy: [_MovieOrdering]
+        filter: _MovieFilter
+        _id: Long
+        _ids: [Long]
+        first: Int
+        offset: Int
+    ): [Movie]
+    produced(
+        tagline: String
+        title: String
+        released: Long
+        taglines: [String]
+        titles: [String]
+        releaseds: [Long]
+        orderBy: [_MovieOrdering]
+        filter: _MovieFilter
+        _id: Long
+        _ids: [Long]
+        first: Int
+        offset: Int
+    ): [Movie]
+    directed(
+        tagline: String
+        title: String
+        released: Long
+        taglines: [String]
+        titles: [String]
+        releaseds: [Long]
+        orderBy: [_MovieOrdering]
+        filter: _MovieFilter
+        _id: Long
+        _ids: [Long]
+        first: Int
+        offset: Int
+    ): [Movie]
+}
