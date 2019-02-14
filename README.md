@@ -50,6 +50,18 @@ Set new password for user neo4j:
 $ echo "CALL dbms.security.changePassword('<new-password>');"  | cypher-shell -u neo4j -p neo4j
 ```
 
+#### GraphQL schema managment
+Create GraphQL schema from existing data in database
+```
+$ echo "CALL graphql.idl(null)"  | cypher-shell -u neo4j -p <new-password>
+```
+
+Create GraphQL schema from provided schema
+```
+$ echo "CALL graphql.idl('<my-schema>')"  | cypher-shell -u neo4j -p <new-password>
+```
+You can create a schema with GraphQL Editor tool
+
 ### Setup Yii2
 If you want a basic application with yii:
 ```
