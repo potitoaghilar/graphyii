@@ -4,6 +4,7 @@ namespace app\helpers;
 
 use Yii;
 use GuzzleHttp;
+use yii\helpers\FileHelper;
 use yii\helpers\Json;
 
 class GraphDatabaseAccessLayer
@@ -12,8 +13,9 @@ class GraphDatabaseAccessLayer
     /**
      * @param $graphqlSchema String GraphQL schema filename. Example: Models.graphql
      * @return string
+     * @throws \yii\base\Exception
      */
-    public static function rebuildSchemaModels($graphqlSchema) {
+    public static function buildSchemaModels($graphqlSchema) {
 
         $modelsPath = Yii::getAlias('@app/models/');
 
@@ -25,6 +27,9 @@ class GraphDatabaseAccessLayer
         for ($i = 0; $i < count($types); $i++) {
             $types[$i] = rtrim($types[$i]);
         }
+
+        // Create path if not exists
+        FileHelper::createDirectory($modelsPath . 'graphql', $mode = 0775, $recursive = true);
 
         // Create model classes
         foreach ($types as $type) {
@@ -49,14 +54,37 @@ class GraphDatabaseAccessLayer
         // Get attributes
         $attributes = '';
         foreach ($data as $attribute) {
-            $attributes .= "\tpublic $" . explode(':', $attribute)[0] . ";\n";
+            $parts = explode(':', $attribute);
+            $attributes .= "\t/**\n\t* @var " . self::typeConversion($parts[1]) . "\n\t*/\n\tpublic $" . $parts[0] . ";\n\n";
         }
 
         // Generate template
-        $template = "<?php\n\nclass $className {\n\n$attributes\n}";
+        $template = "<?php\n\nnamespace app\models\graphql;\n\nclass $className {\n\n$attributes\n}";
 
         // Save model
-        file_put_contents(Yii::getAlias('@app/models/' . $className . '.php'), $template);
+        file_put_contents(Yii::getAlias('@app/models/graphql/' . $className . '.php'), $template);
+
+    }
+
+    private static function typeConversion($type) {
+
+        $isArray = false;
+
+        // Check if is array
+        if(substr($type, 0, 1) == '[') {
+            $isArray = true;
+            $type = substr($type, 1, strlen($type) - 2);
+        }
+
+        // Do conversion
+        return str_replace(['Long'], ['int'], $type) . ($isArray ? '[]' : '');
+
+    }
+
+    /**
+     * Use this function to update graphql graph in database with provided graph schema
+     */
+    public static function updateDatabaseGraph() {
 
     }
 
