@@ -41,6 +41,7 @@ do
 
 		# Create Yii DAL to GraphQL API
 		sudo -u $SUDO_USER -H sh -c "cp params.php $APPNAME/config/params.php"
+		sudo -u $SUDO_USER -H sh -c "sed -i -e 's/<db-password>/$DB_PASSWD/g' $APPNAME/config/params.php"
 		sudo -u $SUDO_USER -H sh -c "mkdir $APPNAME/helpers"
 		sudo -u $SUDO_USER -H sh -c "cp GraphDatabaseAccessLayer.php $APPNAME/helpers/GraphDatabaseAccessLayer.php"
 		cd $APPNAME

@@ -20,6 +20,7 @@ $ npm install yarn -g
 $ chmod +x configure.sh
 $ sudo ./configure.sh  <db-password> <yiimode:basic|advanced> <app-name>
 ```
+TODO: implement for advanced yii template
 
 ## Manual environment configuration
 
@@ -109,7 +110,7 @@ return [
 
     'api_endpoint' => 'http://localhost:7474/graphql/',
     'db_username' => "neo4j",
-    'db_password' => "neo4j",
+    'db_password' => "<db-password>",
 ];
 ```
 
