@@ -24,6 +24,19 @@ $ sudo ./configure.sh  <db-password> <yiimode:basic|advanced> <app-name>
 ## Manual environment configuration
 
 ### Setup Neo4j
+Add repository:
+```
+# Add required repos
+rpm --import https://debian.neo4j.org/neotechnology.gpg.key
+cat <<EOF>  /etc/yum.repos.d/neo4j.repo
+[neo4j]
+name=Neo4j RPM Repository
+baseurl=https://yum.neo4j.org/stable
+enabled=1
+gpgcheck=1
+EOF
+```
+
 Install neo4j enterprise edition and configure it with a username and a password:
 ```
 $ sudo dnf install neo4j-enterprise
