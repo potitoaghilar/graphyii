@@ -22,9 +22,9 @@ EOF
 # Database configuration
 dnf install neo4j-enterprise
 curl -s https://api.github.com/repos/neo4j-graphql/neo4j-graphql/releases/latest | grep browser_download_url | cut -d '"' -f 4 | xargs wget -O /var/lib/neo4j/plugins/neo4j-graphql.jar
-if ! grep -q "dbms.unmanaged_extension_classes=org.neo4j.graphql=/graphql" "/etc/neo4j.conf"; then
-	echo "dbms.unmanaged_extension_classes=org.neo4j.graphql=/graphql" >> /etc/neo4j.conf
-	echo "dbms.security.procedures.unrestricted=graphql.*" >> /etc/neo4j.conf
+if ! grep -q "dbms.unmanaged_extension_classes=org.neo4j.graphql=/graphql" "/etc/neo4j/neo4j.conf"; then
+	echo "dbms.unmanaged_extension_classes=org.neo4j.graphql=/graphql" >> /etc/neo4j/neo4j.conf
+	echo "dbms.security.procedures.unrestricted=graphql.*" >> /etc/neo4j/neo4j.conf
 fi
 neo4j start
 sleep 5
