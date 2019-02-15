@@ -45,10 +45,6 @@ do
 		sudo -u $SUDO_USER -H sh -c "cp GraphDatabaseAccessLayer.php $APPNAME/helpers/GraphDatabaseAccessLayer.php"
 		cd $APPNAME
 		sudo -u $SUDO_USER -H sh -c "composer require guzzlehttp/guzzle"
-		cd ..
-
-		# Add project directory to .gitignore
-		echo "$APPNAME/*" >> .gitignore
 
 		printf "\n\nConfiguration completed!\n\n"
 		exit

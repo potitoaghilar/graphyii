@@ -121,12 +121,6 @@ $ cd <app-name>
 $ composer require guzzlehttp/guzzle
 ```
 
-### Remove current .git project
-Remove current .git directory to make space to production git project:
-```
-$ rm -rf .git
-```
-
 ## Example
 Load test data to database and implement this example class:
 ```
