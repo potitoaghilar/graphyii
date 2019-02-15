@@ -119,6 +119,7 @@ And execute this script:
 $ mkdir <app-name>/helpers
 $ cp GraphDatabaseAccessLayer.php <app-name>/helpers/GraphDatabaseAccessLayer.php
 $ cd <app-name>
+$ touch <app-name>/models/Models.graphql
 $ composer require guzzlehttp/guzzle
 ```
 
@@ -158,3 +159,6 @@ class SiteController extends Controller {
 }
 
 ```
+
+## Contributions
+Any contribution will be apreciated! Just send a PR.

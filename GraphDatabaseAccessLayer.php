@@ -7,6 +7,8 @@ use GuzzleHttp;
 use yii\helpers\FileHelper;
 use yii\helpers\Json;
 
+abstract class GraphModelType {}
+
 class GraphDatabaseAccessLayer
 {
 
@@ -33,7 +35,7 @@ class GraphDatabaseAccessLayer
 
         // Create model classes
         foreach ($types as $type) {
-            self::createModel($type);
+            self::createModel($type, self::extractTypeNames($types));
         }
 
         // Return status
@@ -43,7 +45,17 @@ class GraphDatabaseAccessLayer
 
     }
 
-    private static function createModel($type) {
+    private static function extractTypeNames($types) {
+        $allTypeNames = [];
+
+        foreach ($types as $type) {
+            $allTypeNames[] = explode("\n", $type)[0];
+        }
+
+        return $allTypeNames;
+    }
+
+    private static function createModel($type, $allTypeNames) {
 
         $data = explode("\n", $type);
 
@@ -51,22 +63,30 @@ class GraphDatabaseAccessLayer
         $className = $data[0];
         unset($data[0]);
 
-        // Get attributes
+        // Get attributes and generate constructor directives
         $attributes = '';
+        $constructorDirectives = [];
         foreach ($data as $attribute) {
             $parts = explode(':', $attribute);
+
+            // Generate attribute
             $attributes .= "\t/**\n\t* @var " . self::typeConversion($parts[1]) . "\n\t*/\n\tpublic $" . $parts[0] . ";\n\n";
+
+            // Generate constructor directive
+            if(in_array(self::typeConversion($parts[1], false), $allTypeNames)) {
+                $constructorDirectives .= "\n\t\t\$this->$parts[0] = new " . self::typeConversion($parts[1], false) . "();";
+            }
         }
 
         // Generate template
-        $template = "<?php\n\nnamespace app\models\graphql;\n\nclass $className {\n\n$attributes\n}";
+        $template = "<?php\n\nnamespace app\models\graphql;\n\nuse app\helpers\GraphModelType;\n\nclass $className extends GraphModelType {\n\n$attributes\n\n/**\n\t* $className constructor.\n\t*/\n\tpublic function __construct() { $constructorDirectives\n\t}\n}";
 
         // Save model
         file_put_contents(Yii::getAlias('@app/models/graphql/' . $className . '.php'), $template);
 
     }
 
-    private static function typeConversion($type) {
+    private static function typeConversion($type, $ignoreArray = true) {
 
         $isArray = false;
 
@@ -77,7 +97,7 @@ class GraphDatabaseAccessLayer
         }
 
         // Do conversion
-        return str_replace(['Long'], ['int'], $type) . ($isArray ? '[]' : '');
+        return str_replace(['Long'], ['int'], $type) . ($isArray && !$ignoreArray ? '[]' : '');
 
     }
 
@@ -85,7 +105,7 @@ class GraphDatabaseAccessLayer
      * Use this function to update graphql graph in database with provided graph schema
      */
     public static function updateDatabaseGraph() {
-
+        // TODO
     }
 
     /**
@@ -105,7 +125,34 @@ class GraphDatabaseAccessLayer
                 'query' => $gql,
             ],
         ]);
-        return Json::decode($res->getBody()->getContents())['data'];
+        return self::json2Object(Json::decode($res->getBody()->getContents())['data']);
+    }
+
+    private static function json2Object($json) {
+
+        $result = [];
+
+        foreach ($json as $modelName => $instances) {
+            foreach ($instances as $instance) {
+
+                $modelPath = "app\models\graphql\\$modelName";
+                $model = new $modelPath();
+                foreach ($instance as $paramName => $paramValue) {
+
+                    if(is_a($model->$paramName, 'app\helpers\GraphModelType')) {
+                        $model->$paramName = "TODO";
+                    } else {
+                        $model->$paramName = $paramValue;
+                    }
+
+                }
+
+                $result[$modelName][] = $model;
+            }
+        }
+
+        return $result;
+
     }
 
     public static function mutation($gql) {
