@@ -2,6 +2,8 @@
 
 namespace app\helpers;
 
+use app\models\graphql\Movie;
+use app\models\graphql\Person;
 use Yii;
 use GuzzleHttp;
 use yii\helpers\FileHelper;
@@ -63,35 +65,54 @@ class GraphDatabaseAccessLayer
         $className = $data[0];
         unset($data[0]);
 
-        // Get attributes and generate constructor directives
+        // Get attributes and generate methods
         $attributes = '';
-        $constructorDirectives = [];
+        $methods = '';
         foreach ($data as $attribute) {
             $parts = explode(':', $attribute);
 
-            // Generate attribute
-            $attributes .= "\t/**\n\t* @var " . self::typeConversion($parts[1]) . "\n\t*/\n\tpublic $" . $parts[0] . ";\n\n";
+            // Check if type is standard or GraphModelType
+            $isGraphModelType = in_array(self::typeConversion($parts[1], true), $allTypeNames);
 
-            // Generate constructor directive
-            if(in_array(self::typeConversion($parts[1], false), $allTypeNames)) {
-                $constructorDirectives .= "\n\t\t\$this->$parts[0] = new " . self::typeConversion($parts[1], false) . "();";
+            // Set attribute visibility
+            if($isGraphModelType) {
+                $attrVisibility = "private";
+            } else {
+                $attrVisibility = "public";
             }
+
+            // Generate attribute
+            $attributes .= "\n\n\t/**\n\t* @var " . self::typeConversion($parts[1]) . "\n\t*/\n\t$attrVisibility \$_" . $parts[0] . ";";
+
+            // Generate methods
+            if($isGraphModelType) {
+
+                // If is array create empty array otherwise create new empty object
+                if(self::isArray($parts[1])) {
+                    $newInstance = "[]";
+                } else {
+                    $newInstance = "new " . self::typeConversion($parts[1], true) . "();";
+                }
+
+                $methods .= "\n\n\tpublic function $parts[0]() { return \$this->$parts[0] ?? $newInstance; }";
+            }
+            // TODO generate methods for all type of attributes
         }
 
         // Generate template
-        $template = "<?php\n\nnamespace app\models\graphql;\n\nuse app\helpers\GraphModelType;\n\nclass $className extends GraphModelType {\n\n$attributes\n\n/**\n\t* $className constructor.\n\t*/\n\tpublic function __construct() { $constructorDirectives\n\t}\n}";
+        $template = "<?php\n\nnamespace app\models\graphql;\n\nuse app\helpers\GraphModelType;\n\nclass $className extends GraphModelType { $attributes\n$methods\n}";
 
         // Save model
         file_put_contents(Yii::getAlias('@app/models/graphql/' . $className . '.php'), $template);
 
     }
 
-    private static function typeConversion($type, $ignoreArray = true) {
+    private static function typeConversion($type, $ignoreArray = false) {
 
         $isArray = false;
 
         // Check if is array
-        if(substr($type, 0, 1) == '[') {
+        if(self::isArray($type)) {
             $isArray = true;
             $type = substr($type, 1, strlen($type) - 2);
         }
@@ -99,6 +120,10 @@ class GraphDatabaseAccessLayer
         // Do conversion
         return str_replace(['Long'], ['int'], $type) . ($isArray && !$ignoreArray ? '[]' : '');
 
+    }
+
+    private static function isArray($type) {
+        return substr($type, 0, 1) == '[';
     }
 
     /**
@@ -110,7 +135,7 @@ class GraphDatabaseAccessLayer
 
     /**
      * @param $gql String GraphQL query
-     * @return mixed
+     * @return GraphModelType[]
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
     public static function query($gql) {
@@ -133,26 +158,37 @@ class GraphDatabaseAccessLayer
         $result = [];
 
         foreach ($json as $modelName => $instances) {
-            foreach ($instances as $instance) {
 
-                $modelPath = "app\models\graphql\\$modelName";
-                $model = new $modelPath();
-                foreach ($instance as $paramName => $paramValue) {
-
-                    if(is_a($model->$paramName, 'app\helpers\GraphModelType')) {
-                        $model->$paramName = "TODO";
-                    } else {
-                        $model->$paramName = $paramValue;
-                    }
-
+            // Check if is single object or an array of objects
+            if(array_values($instances) !== $instances) {
+                $result = self::createModelFromJson($modelName, $instances);
+            } else {
+                foreach ($instances as $instance) {
+                    $result[$modelName][] = self::createModelFromJson($modelName, $instance);
                 }
-
-                $result[$modelName][] = $model;
             }
+
         }
 
         return $result;
 
+    }
+
+    private static function createModelFromJson($modelName, $params) {
+        $modelPath = "app\models\graphql\\$modelName";
+        $model = new $modelPath();
+
+        foreach ($params as $paramName => $paramValue) {
+
+            if (method_exists($model, $paramName)/* && is_a($model->$paramName(), 'app\helpers\GraphModelType')*/) {
+                $model->$paramName = self::json2Object([str_replace('app\models\graphql\\', '', get_class($model->$paramName())) => $paramValue]);
+            } else {
+                $model->$paramName = $paramValue;
+            }
+
+        }
+
+        return $model;
     }
 
     public static function mutation($gql) {
