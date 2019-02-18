@@ -2,8 +2,6 @@
 
 namespace app\helpers;
 
-use app\models\graphql\Movie;
-use app\models\graphql\Person;
 use Yii;
 use GuzzleHttp;
 use yii\helpers\FileHelper;
@@ -75,28 +73,22 @@ class GraphDatabaseAccessLayer
             $isGraphModelType = in_array(self::typeConversion($parts[1], true), $allTypeNames);
 
             // Set attribute visibility
-            if($isGraphModelType) {
-                $attrVisibility = "private";
+            /*if($isGraphModelType) {
+                $attrVisibility = 'private';
             } else {
-                $attrVisibility = "public";
-            }
+                $attrVisibility = 'public';
+            }*/
+
+            $attrVisibility = 'public';
 
             // Generate attribute
-            $attributes .= "\n\n\t/**\n\t* @var " . self::typeConversion($parts[1]) . "\n\t*/\n\t$attrVisibility \$_" . $parts[0] . ";";
+            $attributes .= "\n\n\t/**\n\t* @var " . self::typeConversion($parts[1]) . "\n\t*/\n\t$attrVisibility \$" . $parts[0] . ";";
 
             // Generate methods
             if($isGraphModelType) {
-
-                // If is array create empty array otherwise create new empty object
-                if(self::isArray($parts[1])) {
-                    $newInstance = "[]";
-                } else {
-                    $newInstance = "new " . self::typeConversion($parts[1], true) . "();";
-                }
-
-                $methods .= "\n\n\tpublic function $parts[0]() { return \$this->$parts[0] ?? $newInstance; }";
+                $methods .= "\n\n\tpublic function get" . ucfirst($parts[0]) . "Class() { return " . self::typeConversion($parts[1], true) . "::class; }";
             }
-            // TODO generate methods for all type of attributes
+
         }
 
         // Generate template
@@ -127,6 +119,7 @@ class GraphDatabaseAccessLayer
     }
 
     /**
+     * @deprecated
      * Use this function to update graphql graph in database with provided graph schema
      */
     public static function updateDatabaseGraph() {
@@ -164,7 +157,7 @@ class GraphDatabaseAccessLayer
                 $result = self::createModelFromJson($modelName, $instances);
             } else {
                 foreach ($instances as $instance) {
-                    $result[$modelName][] = self::createModelFromJson($modelName, $instance);
+                    $result[] = self::createModelFromJson($modelName, $instance);
                 }
             }
 
@@ -175,14 +168,21 @@ class GraphDatabaseAccessLayer
     }
 
     private static function createModelFromJson($modelName, $params) {
+
+        // Create new model from class name
         $modelPath = "app\models\graphql\\$modelName";
         $model = new $modelPath();
 
         foreach ($params as $paramName => $paramValue) {
 
-            if (method_exists($model, $paramName)/* && is_a($model->$paramName(), 'app\helpers\GraphModelType')*/) {
-                $model->$paramName = self::json2Object([str_replace('app\models\graphql\\', '', get_class($model->$paramName())) => $paramValue]);
+            // Method to call, if exists, to get types of attributes
+            $getClassMethodName = 'get' . ucfirst($paramName) . 'Class';
+
+            if (method_exists($model, $getClassMethodName)) {
+                // Iterate through other graphql object
+                $model->$paramName = self::json2Object([str_replace('app\models\graphql\\', '', $model->$getClassMethodName()) => $paramValue]);
             } else {
+                // Set attribute value
                 $model->$paramName = $paramValue;
             }
 
@@ -191,6 +191,10 @@ class GraphDatabaseAccessLayer
         return $model;
     }
 
+    /**
+     * @deprecated
+     * @param $gql
+     */
     public static function mutation($gql) {
         // TODO
     }

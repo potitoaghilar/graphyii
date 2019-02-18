@@ -144,17 +144,44 @@ class SiteController extends Controller {
 
     public function actionMyGraph() {
 
+        // Build models with a provided GraphQL schema
+        GDAL::buildSchemaModels('Models.graphql');
+
+        // Make an example query
+        /**
+         * @var $films \app\models\graphql\Movie[]
+         */
+        $films = GDAL::query('
+        
+        {
+          Movie {
+            title
+            directed {
+              name
+            }
+            actedIn {
+              name
+            }
+          }
+        }
+        
+        ');
+
+        // Fast data elaboration example:
+        // associate a base64 string of (director name + actor name) to single actor who acted in a specific film for each film in database
         $result = [];
-
-        // Fetch all movies title from graph database
-        $movies = GDAL::query("{ Movie{ title } }")['data']['Movie'];
-
-        // Adds random values to each film using title as key
-        foreach($movies as $movie) {
-            $result[$movie['title']] = Yii::$app->security->generateRandomString(5);
+        foreach ($films as $film) {
+            foreach ($film->actedIn as $actor) {
+                $result[$film->title][$actor->name] = base64_encode($film->directed->name . $actor->name);
+            }
         }
 
-    return Json::encode($result);
+        // Return result in Json format
+        return Json::encode($result);
+
+        // Less code than you thought, ah?
+
+    }
 
 }
 
