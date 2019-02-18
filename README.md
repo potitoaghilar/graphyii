@@ -120,7 +120,7 @@ $ mkdir <app-name>/helpers
 $ cp GraphDatabaseAccessLayer.php <app-name>/helpers/GraphDatabaseAccessLayer.php
 $ cd <app-name>
 $ touch <app-name>/models/Models.graphql
-$ composer require guzzlehttp/guzzle
+$ composer require guzzlehttp/guzzle graphaware/neo4j-php-client:^4.0
 ```
 
 ## Example

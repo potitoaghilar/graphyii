@@ -4,6 +4,7 @@ namespace app\helpers;
 
 use Yii;
 use GuzzleHttp;
+use GraphAware\Neo4j\Client\ClientBuilder;
 use yii\helpers\FileHelper;
 use yii\helpers\Json;
 
@@ -11,6 +12,16 @@ abstract class GraphModelType {}
 
 class GraphDatabaseAccessLayer
 {
+
+    /**
+     * Build GraphQL schema models and deploy to database schema provided
+     * @param $graphqlSchema String
+     * @throws \yii\base\Exception
+     */
+    public static function buildSchema($graphqlSchema) {
+        //self::updateDatabaseGraph($graphqlSchema);
+        self::buildSchemaModels($graphqlSchema);
+    }
 
     /**
      * @param $graphqlSchema String GraphQL schema filename. Example: Models.graphql
@@ -25,10 +36,7 @@ class GraphDatabaseAccessLayer
         $schema = file_get_contents($modelsPath . $graphqlSchema);
 
         // Normalize datas and extract types
-        $types = array_filter(explode('}', preg_replace(['/\([^)]+\)/'], '', str_replace(['type ', '{', ' ', "\n\n"], '', $schema))));
-        for ($i = 0; $i < count($types); $i++) {
-            $types[$i] = rtrim($types[$i]);
-        }
+        $types = self::extractTypes($schema);
 
         // Create path if not exists
         FileHelper::createDirectory($modelsPath . 'graphql', $mode = 0775, $recursive = true);
@@ -43,6 +51,43 @@ class GraphDatabaseAccessLayer
             'status' => 'success',
         ]);
 
+    }
+
+    /**
+     * Extract types from provided schema
+     * @param $schema
+     * @return array
+     */
+    private static function extractTypes($schema) {
+
+        $types = [];
+
+        // Normalize and split data
+        $entries = explode('}', $schema);
+        for($i = 0; $i < count($entries); $i++) {
+            $entries[$i] = ltrim(rtrim($entries[$i]));
+        }
+
+        // Second normalization
+        foreach ($entries as $entry) {
+
+            // Check if entry is a type
+            if(substr($entry, 0, 5) == 'type ') {
+                $types[] = preg_replace(['/\([^)]+\)/'], '', str_replace(['type ', '{', ' ', "\n\n", '!'], '', $entry));
+
+                // WARNING: regex is removing required fields
+                // TODO this should be implemented in future
+            }
+
+        }
+
+        return $types;
+
+        /*$types = array_filter(explode('}', preg_replace(['/\([^)]+\)/'], '', str_replace(['type ', '{', ' ', "\n\n"], '', $schema))));
+        for ($i = 0; $i < count($types); $i++) {
+            $types[$i] = rtrim($types[$i]);
+        }
+        return $types;*/
     }
 
     private static function extractTypeNames($types) {
@@ -119,11 +164,24 @@ class GraphDatabaseAccessLayer
     }
 
     /**
-     * @deprecated
-     * Use this function to update graphql graph in database with provided graph schema
+     * Use this function to update graphql graph in database with provided graphql schema
+     * @param $graphqlSchema String
      */
-    public static function updateDatabaseGraph() {
-        // TODO
+    private static function updateDatabaseGraph($graphqlSchema) {
+
+        // Create a client to perform connection and set schema
+        $client = ClientBuilder::create()
+            ->addConnection('bolt', 'bolt://' . Yii::$app->params['db_username'] . ':' . Yii::$app->params['db_password'] . '@localhost:7687')
+            ->build();
+
+        // Load schema
+        $schema = file_get_contents(Yii::getAlias("@app/models/$graphqlSchema"));
+
+        // Deploy schema to database
+        $query = "CALL graphql.idl('$schema')";
+
+        $client->run($query);
+
     }
 
     /**
