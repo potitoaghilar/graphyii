@@ -46,7 +46,7 @@ do
 		sudo -u $SUDO_USER -H sh -c "cp GraphDatabaseAccessLayer.php $APPNAME/helpers/GraphDatabaseAccessLayer.php"
 		sudo -u $SUDO_USER -H sh -c "touch $APPNAME/models/Models.graphql"
 		cd $APPNAME
-		sudo -u $SUDO_USER -H sh -c "composer require guzzlehttp/guzzle"
+		sudo -u $SUDO_USER -H sh -c "composer require guzzlehttp/guzzle graphaware/neo4j-php-client:^4.0"
 
 		printf "\n\nConfiguration completed!\n\n"
 		exit

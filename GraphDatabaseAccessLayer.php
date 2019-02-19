@@ -7,8 +7,20 @@ use GuzzleHttp;
 use GraphAware\Neo4j\Client\ClientBuilder;
 use yii\helpers\FileHelper;
 use yii\helpers\Json;
+use Exception;
 
 abstract class GraphModelType {}
+
+class GraphDatabaseAccessLayerException extends Exception {
+
+    public function __construct($message, $code = 0, Exception $previous = null) {
+        parent::__construct($message, $code, $previous);
+    }
+
+    public function __toString() {
+        return __CLASS__ . ": [{$this->code}]: {$this->message}\n";
+    }
+}
 
 class GraphDatabaseAccessLayer
 {
@@ -19,7 +31,7 @@ class GraphDatabaseAccessLayer
      * @throws \yii\base\Exception
      */
     public static function buildSchema($graphqlSchema) {
-        //self::updateDatabaseGraph($graphqlSchema);
+        self::updateDatabaseGraph($graphqlSchema);
         self::buildSchemaModels($graphqlSchema);
     }
 
@@ -63,38 +75,63 @@ class GraphDatabaseAccessLayer
         $types = [];
 
         // Normalize and split data
-        $entries = explode('}', $schema);
+        $entries = preg_split("/}\n|}$/", $schema);
         for($i = 0; $i < count($entries); $i++) {
-            $entries[$i] = ltrim(rtrim($entries[$i]));
+            $entries[$i] = ltrim(rtrim(str_replace("\n\n", "\n", $entries[$i])));
         }
 
         // Second normalization
         foreach ($entries as $entry) {
 
-            // Check if entry is a type
-            if(substr($entry, 0, 5) == 'type ') {
-                $types[] = preg_replace(['/\([^)]+\)/'], '', str_replace(['type ', '{', ' ', "\n\n", '!'], '', $entry));
+            // Check if entry is a type or an interface
+            if(substr($entry, 0, 5) == 'type ' || substr($entry, 0, 10) == 'interface ') {
 
-                // WARNING: regex is removing required fields
-                // TODO this should be implemented in future
+                // Regex:
+                // - content in parenthesis
+                $parenthesis = '\([^)]+\)';
+                // - decorators
+                $decorators = '@.*';
+                // - extension and implementation
+                $typeExtImpl = '(implements|extends).+';
+                // - remaining characters
+                $other = 'type |interface |{| ';
+
+                // Formatted data
+                $formatted = preg_replace(["/$parenthesis|$decorators|$typeExtImpl|$other/"], '', $entry);
+                $formattedParts = explode("\n", $formatted, 2);
+                $attributes = [];
+                foreach (explode("\n", $formattedParts[1]) as $parameter) {
+
+                    // Build parameter
+                    $paramParts = explode(':', $parameter);
+                    $attributes[] = [
+                        'name' => lcfirst($paramParts[0]),
+                        'type' => self::typeConversion(str_replace('!', '', $paramParts[1]), true), // Remove required field: !
+                        'isArray' => substr($paramParts[1], 0, 1) == '[',
+                        'required' => substr($paramParts[1], -1) == '!',
+                        'visibility' => 'public', // TODO this can be extended in future
+                    ];
+
+                }
+
+                // Create new type
+                $types[] = [
+                    'className' => $formattedParts[0],
+                    'attributes' => $attributes,
+                ];
+
             }
 
         }
 
         return $types;
-
-        /*$types = array_filter(explode('}', preg_replace(['/\([^)]+\)/'], '', str_replace(['type ', '{', ' ', "\n\n"], '', $schema))));
-        for ($i = 0; $i < count($types); $i++) {
-            $types[$i] = rtrim($types[$i]);
-        }
-        return $types;*/
     }
 
     private static function extractTypeNames($types) {
         $allTypeNames = [];
 
         foreach ($types as $type) {
-            $allTypeNames[] = explode("\n", $type)[0];
+            $allTypeNames[] = $type['className'];
         }
 
         return $allTypeNames;
@@ -102,42 +139,65 @@ class GraphDatabaseAccessLayer
 
     private static function createModel($type, $allTypeNames) {
 
-        $data = explode("\n", $type);
-
         // Get className
-        $className = $data[0];
-        unset($data[0]);
+        $className = $type['className'];
 
         // Get attributes and generate methods
         $attributes = '';
         $methods = '';
-        foreach ($data as $attribute) {
-            $parts = explode(':', $attribute);
+        $constructorParams = '';
+        $constructorDirectives = '';
+        $constructorParamsCount = 0;
+        foreach ($type['attributes'] as $attribute) {
+
+            // Generate documentation and attribute
+            $required = '';
+            if($attribute['required']) {
+                $required = "\n\t * @required";
+            }
+            $documentation = "\t/**\n\t * @var ${attribute['type']}" . ($attribute['isArray'] ? '[]' : '') . "$required\n\t */";
+            $attributes .= "\n\n$documentation\n\t${attribute['visibility']} \$${attribute['name']};";
+
 
             // Check if type is standard or GraphModelType
-            $isGraphModelType = in_array(self::typeConversion($parts[1], true), $allTypeNames);
-
-            // Set attribute visibility
-            /*if($isGraphModelType) {
-                $attrVisibility = 'private';
-            } else {
-                $attrVisibility = 'public';
-            }*/
-
-            $attrVisibility = 'public';
-
-            // Generate attribute
-            $attributes .= "\n\n\t/**\n\t* @var " . self::typeConversion($parts[1]) . "\n\t*/\n\t$attrVisibility \$" . $parts[0] . ";";
+            $isGraphModelType = in_array($attribute['type'], $allTypeNames);
 
             // Generate methods
             if($isGraphModelType) {
-                $methods .= "\n\n\tpublic function get" . ucfirst($parts[0]) . "Class() { return " . self::typeConversion($parts[1], true) . "::class; }";
+                $methods .= "\n\n\tpublic function get" . ucfirst($attribute['name']) . "Class() { return ${attribute['type']}::class; }";
+            }
+
+            // Check if is a standard type
+            if(!$isGraphModelType) {
+
+                // Check if required
+                $nullValue = '';
+                if(!$attribute['required']) {
+                    $nullValue = ' = null';
+                }
+
+                // Adds parameters and directives
+                $constructorParams .= "\$${attribute['name']}$nullValue, ";
+                $constructorDirectives .= "\n\t\t\$this->${attribute['name']} = $${attribute['name']};";
+
+                $constructorParamsCount++;
+
             }
 
         }
 
+        // Remove trailing characters from parameters
+        if($constructorParamsCount > 0) {
+            $constructorParams = substr($constructorParams, 0, strlen($constructorParams) - 2);
+        }
+
+        // Generate constructor and newEntity methods
+        $constructor = "\n\tpublic function __construct($constructorParams) { $constructorDirectives\n\t}";
+        $paramsValues = str_repeat('null, ', $constructorParamsCount);
+        $newEntity = "\n\tpublic static function newEntity() { return new self(" . ($constructorParamsCount > 0 ? substr($paramsValues, 0, strlen($paramsValues) - 2) : $paramsValues) . "); }";
+
         // Generate template
-        $template = "<?php\n\nnamespace app\models\graphql;\n\nuse app\helpers\GraphModelType;\n\nclass $className extends GraphModelType { $attributes\n$methods\n}";
+        $template = "<?php\n\nnamespace app\models\graphql;\n\nuse app\helpers\GraphModelType;\n\nclass $className extends GraphModelType { $attributes\n$methods\n$constructor\n$newEntity\n}";
 
         // Save model
         file_put_contents(Yii::getAlias('@app/models/graphql/' . $className . '.php'), $template);
@@ -155,7 +215,7 @@ class GraphDatabaseAccessLayer
         }
 
         // Do conversion
-        return str_replace(['Long'], ['int'], $type) . ($isArray && !$ignoreArray ? '[]' : '');
+        return str_replace(['Long', 'ID'], ['int', 'int'], $type) . ($isArray && !$ignoreArray ? '[]' : '');
 
     }
 
@@ -188,6 +248,7 @@ class GraphDatabaseAccessLayer
      * @param $gql String GraphQL query
      * @return GraphModelType[]
      * @throws \GuzzleHttp\Exception\GuzzleException
+     * @throws GraphDatabaseAccessLayerException
      */
     public static function query($gql) {
         $client = new GuzzleHttp\Client();
@@ -201,7 +262,16 @@ class GraphDatabaseAccessLayer
                 'query' => $gql,
             ],
         ]);
-        return self::json2Object(Json::decode($res->getBody()->getContents())['data']);
+
+        $response = Json::decode($res->getBody()->getContents());
+
+        // Check if has failed
+        if(isset($response['errors'])) {
+            throw new GraphDatabaseAccessLayerException($response['errors'][0]['message']);
+        }
+
+        // Result values
+        return self::json2Object($response['data']);
     }
 
     private static function json2Object($json) {
@@ -229,7 +299,7 @@ class GraphDatabaseAccessLayer
 
         // Create new model from class name
         $modelPath = "app\models\graphql\\$modelName";
-        $model = new $modelPath();
+        $model = $modelPath::newEntity();
 
         foreach ($params as $paramName => $paramValue) {
 
