@@ -9,19 +9,6 @@ use yii\helpers\FileHelper;
 use yii\helpers\Json;
 use Exception;
 
-abstract class GraphModelType {}
-
-class GraphDatabaseAccessLayerException extends Exception {
-
-    public function __construct($message, $code = 0, Exception $previous = null) {
-        parent::__construct($message, $code, $previous);
-    }
-
-    public function __toString() {
-        return __CLASS__ . ": [{$this->code}]: {$this->message}\n";
-    }
-}
-
 class GraphDatabaseAccessLayer
 {
 
@@ -164,7 +151,7 @@ class GraphDatabaseAccessLayer
 
             // Generate methods
             if($isGraphModelType) {
-                $methods .= "\n\n\tpublic function get" . ucfirst($attribute['name']) . "Class() { return ${attribute['type']}::class; }";
+                $methods .= "\n\n\tpublic function get" . ucfirst($attribute['name']) . "Class() { return ${attribute['type']}::getClass(); }";
             }
 
             // Check if is a standard type
@@ -196,8 +183,11 @@ class GraphDatabaseAccessLayer
         $paramsValues = str_repeat('null, ', $constructorParamsCount);
         $newEntity = "\n\tpublic static function newEntity() { return new self(" . ($constructorParamsCount > 0 ? substr($paramsValues, 0, strlen($paramsValues) - 2) : $paramsValues) . "); }";
 
+        // Generate getClass method
+        $getClass = "\n\tpublic static function getClass() { return '$className'; }";
+
         // Generate template
-        $template = "<?php\n\nnamespace app\models\graphql;\n\nuse app\helpers\GraphModelType;\n\nclass $className extends GraphModelType { $attributes\n$methods\n$constructor\n$newEntity\n}";
+        $template = "<?php\n\nnamespace app\models\graphql;\n\nuse app\helpers\GraphModelType;\n\nclass $className extends GraphModelType { $attributes\n$methods\n$constructor\n$newEntity\n$getClass\n}";
 
         // Save model
         file_put_contents(Yii::getAlias('@app/models/graphql/' . $className . '.php'), $template);
@@ -245,12 +235,40 @@ class GraphDatabaseAccessLayer
     }
 
     /**
+     * @deprecated
+     * @param $queryClasses String[] Main classes on which execute query. Example: Movie, Person, Tweet...
+     * @return Queries Queries object
+     */
+    public static function queries($queryClasses) {
+
+        $queries = [];
+
+        // Build query objects
+        foreach ($queryClasses as $class) {
+            $queries[$class] = self::query($class);
+        }
+
+        // Return queries
+        return new Queries($queries);
+
+    }
+
+    /**
+     * @param $queryClass String Main class on which execute query. Example: Movie, Person, Tweet...
+     * @return Query
+     */
+    public static function query($queryClass, $callback) {
+        // Build and return single query object
+        return new Query($queryClass, $callback);
+    }
+
+    /**
      * @param $gql String GraphQL query
      * @return GraphModelType[]
      * @throws \GuzzleHttp\Exception\GuzzleException
      * @throws GraphDatabaseAccessLayerException
      */
-    public static function query($gql) {
+    public static function doQuery($gql) {
         $client = new GuzzleHttp\Client();
         $res = $client->request('POST', Yii::$app->params['api_endpoint'], [
             'headers' => [
@@ -327,4 +345,70 @@ class GraphDatabaseAccessLayer
         // TODO
     }
 
+}
+
+// Queries class on which execute queries operations
+class Queries {
+
+    public function __construct($queries) {
+
+    }
+
+    public function executeQuery() {
+        // TODO merge query in one single query request
+    }
+
+}
+
+// Query class on which execute query operations
+class Query {
+
+    private $className;
+    private $callback;
+
+    public function __construct($className, $callback) {
+        $this->className = $className;
+        $this->callback = $callback;
+    }
+
+    public function buildQuery() {
+        $query = Yii::$app->security->generateRandomString(10);
+        // TODO build query here
+        return $query;
+    }
+
+    /**
+     * @throws GraphDatabaseAccessLayerException
+     * @throws GuzzleHttp\Exception\GuzzleException
+     * @return mixed
+     */
+    public function execute() {
+
+        $className = "app\models\graphql\\$this->className";
+        $callback = $this->callback;
+
+        // First execute callback to discover which fields need to be fetched
+        return $callback($className::newEntity());
+
+        GraphDatabaseAccessLayer::doQuery(self::buildQuery());
+
+        // Execute final callback
+        //return $callback('test');
+
+        //TODO
+    }
+
+}
+
+abstract class GraphModelType {}
+
+class GraphDatabaseAccessLayerException extends Exception {
+
+    public function __construct($message, $code = 0, Exception $previous = null) {
+        parent::__construct($message, $code, $previous);
+    }
+
+    public function __toString() {
+        return __CLASS__ . ": [{$this->code}]: {$this->message}\n";
+    }
 }
