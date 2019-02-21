@@ -6,6 +6,73 @@ Use this stack to create powerful web application or any kind of API with Yii2 f
  - GraphQL Playground (To test GQL queries)
  - GraphQL Editor (To build GQL schemas)
 
+## Example
+Load test data to database and implement this example class:
+```php
+
+<?php
+
+namespace app\controllers;
+
+use Yii;
+use yii\helpers\Json;
+[...]
+
+// Use the GraphDatabaseAccessLayer
+use app\helpers\GraphDatabaseAccessLayer as GDAL;
+
+class SiteController extends Controller {
+
+    [...]
+
+    public function actionMyGraph() {
+
+        // Build models with a provided GraphQL schema
+        GDAL::buildSchemaModels('Models.graphql');
+
+        // Entry point for our query
+        $users = User::query([
+            UserQueryAttributes::name => "Tom",
+            // TODO this is not implemented yet
+        ], function($data) {
+
+            // Get only required data from database and return in format you want
+
+            $result = [];
+
+            /**
+             * @var $data User[]
+             */
+            foreach ($data as $user) {
+                foreach ($user->answers() as $answer) {
+                    $result[$answer->id()] = [
+                        'text' => $answer->text(),
+                        'score' => $answer->score(),
+                        'author' => $user->name(),
+                        'author_username' => $user->screen_name(),
+                    ];
+                }
+            }
+
+            return $result;
+
+            // IMPORTANT: USE THE CALLBACK ONLY TO FETCH DATA - DO NOT INCLUDE ANY OTHER LOGIC HERE!
+
+        });
+
+        // The GDAL will analyze and fetch only required data from database
+
+        // Return result in Json format
+        return Json::encode($users);
+
+        // Less code than you thought, ah?
+
+    }
+
+}
+
+```
+
 #### Dependecies
 Install required dependencies:
 ```sh
@@ -118,73 +185,10 @@ And execute this script:
 ```sh
 $ mkdir <app-name>/helpers
 $ cp GraphDatabaseAccessLayer.php <app-name>/helpers/GraphDatabaseAccessLayer.php
+$ cp GraphModelType.php <app-name>/helpers/GraphModelType.php
 $ cd <app-name>
 $ touch <app-name>/models/Models.graphql
 $ composer require guzzlehttp/guzzle graphaware/neo4j-php-client:^4.0
-```
-
-## Example
-Load test data to database and implement this example class:
-```php
-
-<?php
-
-namespace app\controllers;
-
-use Yii;
-use yii\helpers\Json;
-[...]
-
-// Use the GraphDatabaseAccessLayer
-use app\helpers\GraphDatabaseAccessLayer as GDAL;
-
-class SiteController extends Controller {
-
-    [...]
-
-    public function actionMyGraph() {
-
-        // Build models with a provided GraphQL schema
-        GDAL::buildSchemaModels('Models.graphql');
-
-        // Make an example query
-        /**
-         * @var $films \app\models\graphql\Movie[]
-         */
-        $films = GDAL::query('
-        
-        {
-          Movie {
-            title
-            directed {
-              name
-            }
-            actedIn {
-              name
-            }
-          }
-        }
-        
-        ');
-
-        // Fast data elaboration example:
-        // associate a base64 string of (director name + actor name) to single actor who acted in a specific film for each film in database
-        $result = [];
-        foreach ($films as $film) {
-            foreach ($film->actedIn as $actor) {
-                $result[$film->title][$actor->name] = base64_encode($film->directed->name . $actor->name);
-            }
-        }
-
-        // Return result in Json format
-        return Json::encode($result);
-
-        // Less code than you thought, ah?
-
-    }
-
-}
-
 ```
 
 ## Contributions

@@ -29,7 +29,7 @@ class GraphDatabaseAccessLayer
      */
     public static function buildSchemaModels($graphqlSchema) {
 
-        $modelsPath = Yii::getAlias('@app/models/');
+        $modelsPath = Yii::getAlias('@' . self::getModelsPath(false, true));
 
         // Get schema data from
         $schema = file_get_contents($modelsPath . $graphqlSchema);
@@ -42,7 +42,7 @@ class GraphDatabaseAccessLayer
 
         // Create model classes
         foreach ($types as $type) {
-            self::createModel($type, self::extractTypeNames($types));
+            self::createModel($type);
         }
 
         // Return status
@@ -96,10 +96,15 @@ class GraphDatabaseAccessLayer
                         'type' => self::typeConversion(str_replace('!', '', $paramParts[1]), true), // Remove required field: !
                         'isArray' => substr($paramParts[1], 0, 1) == '[',
                         'required' => substr($paramParts[1], -1) == '!',
-                        'visibility' => 'public', // TODO this can be extended in future
+                        'visibility' => 'protected', // TODO this can be extended in future
                     ];
 
                 }
+
+                // Sort attributes by required fields
+                usort($attributes, function ($a, $b) {
+                    return $b['required'] <=> $a['required'];
+                });
 
                 // Create new type
                 $types[] = [
@@ -114,7 +119,7 @@ class GraphDatabaseAccessLayer
         return $types;
     }
 
-    private static function extractTypeNames($types) {
+    /*private static function extractTypeNames($types) {
         $allTypeNames = [];
 
         foreach ($types as $type) {
@@ -122,9 +127,9 @@ class GraphDatabaseAccessLayer
         }
 
         return $allTypeNames;
-    }
+    }*/
 
-    private static function createModel($type, $allTypeNames) {
+    private static function createModel($type) {
 
         // Get className
         $className = $type['className'];
@@ -135,7 +140,11 @@ class GraphDatabaseAccessLayer
         $constructorParams = '';
         $constructorDirectives = '';
         $constructorParamsCount = 0;
+
         foreach ($type['attributes'] as $attribute) {
+
+            // Check if type is standard or GraphModelType
+            $isGraphModelType = self::isGraphModelType($attribute['type']);
 
             // Generate documentation and attribute
             $required = '';
@@ -143,13 +152,18 @@ class GraphDatabaseAccessLayer
                 $required = "\n\t * @required";
             }
             $documentation = "\t/**\n\t * @var ${attribute['type']}" . ($attribute['isArray'] ? '[]' : '') . "$required\n\t */";
-            $attributes .= "\n\n$documentation\n\t${attribute['visibility']} \$${attribute['name']};";
+            $attributes .= "\n\n$documentation\n\t${attribute['visibility']} $${attribute['name']};";
 
 
-            // Check if type is standard or GraphModelType
-            $isGraphModelType = in_array($attribute['type'], $allTypeNames);
+            // Generate getter and setter methods for all attributes
+            /*$graphModelTypeExtension = '';
+            if($isGraphModelType) {
+                $graphModelTypeExtension = "\$this->isQuery && \$this->${attribute['name']} == null ? [new ${attribute['type']}()] : ";
+            }*/
+            $methods .= "\n\n\tpublic function ${attribute['name']}() {\n\t\tparent::requestAttribute('${attribute['name']}', '${attribute['type']}');\n\t\treturn \$this->${attribute['name']};\n\t}"; // Getter
+            $methods .= "\n\n\tpublic function set" . ucfirst($attribute['name']) . "($${attribute['name']}) {\n\t\t\$this->${attribute['name']} = $${attribute['name']};\n\t}"; // Setter
 
-            // Generate methods
+            // Generate methods for defined types
             if($isGraphModelType) {
                 $methods .= "\n\n\tpublic function get" . ucfirst($attribute['name']) . "Class() { return ${attribute['type']}::getClass(); }";
             }
@@ -157,14 +171,14 @@ class GraphDatabaseAccessLayer
             // Check if is a standard type
             if(!$isGraphModelType) {
 
-                // Check if required
+                /*// Check if required
                 $nullValue = '';
                 if(!$attribute['required']) {
                     $nullValue = ' = null';
-                }
+                }*/
 
-                // Adds parameters and directives
-                $constructorParams .= "\$${attribute['name']}$nullValue, ";
+                // Adds parameters and directives to constructor
+                $constructorParams .= "\$${attribute['name']} = null, ";
                 $constructorDirectives .= "\n\t\t\$this->${attribute['name']} = $${attribute['name']};";
 
                 $constructorParamsCount++;
@@ -180,18 +194,40 @@ class GraphDatabaseAccessLayer
 
         // Generate constructor and newEntity methods
         $constructor = "\n\tpublic function __construct($constructorParams) { $constructorDirectives\n\t}";
-        $paramsValues = str_repeat('null, ', $constructorParamsCount);
-        $newEntity = "\n\tpublic static function newEntity() { return new self(" . ($constructorParamsCount > 0 ? substr($paramsValues, 0, strlen($paramsValues) - 2) : $paramsValues) . "); }";
+        //$paramsValues = str_repeat('null, ', $constructorParamsCount);
+        //$newEntity = "\n\tpublic static function newEntity() { return new self(" . ($constructorParamsCount > 0 ? substr($paramsValues, 0, strlen($paramsValues) - 2) : $paramsValues) . "); }";
 
         // Generate getClass method
         $getClass = "\n\tpublic static function getClass() { return '$className'; }";
 
+        // Generate overridden query method
+        $methods .= "\n\n\tpublic static function query(\$attributes, \$callback) {\n\t\treturn parent::executeQuery(self::getClass(), \$callback);\n\t}";
+
+        // Generate user query attributes
+        $queryAttributes = self::generateQueryAttributes($type['attributes']);
+
         // Generate template
-        $template = "<?php\n\nnamespace app\models\graphql;\n\nuse app\helpers\GraphModelType;\n\nclass $className extends GraphModelType { $attributes\n$methods\n$constructor\n$newEntity\n$getClass\n}";
+        $template = "<?php\n\nnamespace " . self::getModelsPath(true, false, false) . ";\n\nuse app\helpers\GraphModelType;\n\nclass $className extends GraphModelType { $attributes\n$methods\n$constructor\n$getClass\n}\n\nclass ${className}QueryAttributes {\n$queryAttributes}";
 
         // Save model
         file_put_contents(Yii::getAlias('@app/models/graphql/' . $className . '.php'), $template);
 
+    }
+
+    private static function generateQueryAttributes($attributes) {
+
+        $queryAttributes = '';
+
+        foreach ($attributes as $attribute) {
+            $queryAttributes .= "\tconst ${attribute['name']} = '${attribute['name']}';\n";
+        }
+
+        return $queryAttributes;
+
+    }
+
+    public static function isGraphModelType($type) {
+        return is_subclass_of(self::getModelsPath(true) . $type, 'app\helpers\GraphModelType');
     }
 
     private static function typeConversion($type, $ignoreArray = false) {
@@ -254,12 +290,12 @@ class GraphDatabaseAccessLayer
     }
 
     /**
-     * @param $queryClass String Main class on which execute query. Example: Movie, Person, Tweet...
+     * @param $callback
      * @return Query
      */
-    public static function query($queryClass, $callback) {
+    public static function query($callback) {
         // Build and return single query object
-        return new Query($queryClass, $callback);
+        return new Query($callback);
     }
 
     /**
@@ -316,20 +352,23 @@ class GraphDatabaseAccessLayer
     private static function createModelFromJson($modelName, $params) {
 
         // Create new model from class name
-        $modelPath = "app\models\graphql\\$modelName";
-        $model = $modelPath::newEntity();
+        $modelName = self::getModelsPath(true) . $modelName;
+        $model = new $modelName();
 
         foreach ($params as $paramName => $paramValue) {
 
             // Method to call, if exists, to get types of attributes
             $getClassMethodName = 'get' . ucfirst($paramName) . 'Class';
 
+            // Define setter method
+            $setter = "set$paramName";
+
             if (method_exists($model, $getClassMethodName)) {
                 // Iterate through other graphql object
-                $model->$paramName = self::json2Object([str_replace('app\models\graphql\\', '', $model->$getClassMethodName()) => $paramValue]);
+                $model->$setter(self::json2Object([str_replace(self::getModelsPath(true), '', $model->$getClassMethodName()) => $paramValue]));
             } else {
                 // Set attribute value
-                $model->$paramName = $paramValue;
+                $model->$setter($paramValue);
             }
 
         }
@@ -343,6 +382,24 @@ class GraphDatabaseAccessLayer
      */
     public static function mutation($gql) {
         // TODO
+    }
+
+    public static function getModelsPath($isGraphQLModel, $forwardSlash = false, $finalSlash = true) {
+
+        $absPath = '';
+
+        if($isGraphQLModel) {
+            $absPath = !$forwardSlash ? 'app\models\graphql\\' : 'app/models/graphql/';
+        } else {
+            $absPath = !$forwardSlash ? 'app\models\\' : 'app/models/';
+        }
+
+        // Remove final slash if required
+        if(!$finalSlash) {
+            $absPath = substr($absPath, 0, strlen($absPath) - 1);
+        }
+
+        return $absPath;
     }
 
 }
@@ -363,11 +420,9 @@ class Queries {
 // Query class on which execute query operations
 class Query {
 
-    private $className;
     private $callback;
 
-    public function __construct($className, $callback) {
-        $this->className = $className;
+    public function __construct($callback) {
         $this->callback = $callback;
     }
 
@@ -384,13 +439,12 @@ class Query {
      */
     public function execute() {
 
-        $className = "app\models\graphql\\$this->className";
         $callback = $this->callback;
 
         // First execute callback to discover which fields need to be fetched
-        return $callback($className::newEntity());
+        return $callback();
 
-        GraphDatabaseAccessLayer::doQuery(self::buildQuery());
+        //GraphDatabaseAccessLayer::doQuery(self::buildQuery());
 
         // Execute final callback
         //return $callback('test');
@@ -399,8 +453,6 @@ class Query {
     }
 
 }
-
-abstract class GraphModelType {}
 
 class GraphDatabaseAccessLayerException extends Exception {
 
