@@ -2,6 +2,7 @@
 
 namespace app\helpers;
 
+use phpDocumentor\Reflection\Types\String_;
 use Yii;
 use GuzzleHttp;
 use GraphAware\Neo4j\Client\ClientBuilder;
@@ -145,7 +146,7 @@ class GraphDatabaseAccessLayer
 
     /**
      * Create a single model php file used to interact with database
-     * @param $type mixed
+     * @param $type array Particular structure created from types extraction
      */
     // TODO improve this method
     private static function createModel($type) {
@@ -153,26 +154,72 @@ class GraphDatabaseAccessLayer
         // Get className
         $className = $type['className'];
 
-        // Get attributes and generate methods
-        $attributes = '';
-        $methods = '';
-        $constructorParams = '';
-        $constructorDirectives = '';
-        $constructorParamsCount = 0;
+        // Generate attributes with documentation
+        $attributes = self::generateAttributes($type['attributes']);
 
-        foreach ($type['attributes'] as $attribute) {
+        // Generate methods
+        $methods = self::generateMethods($type['attributes']);
+
+        // Generate constructor
+        $constructor = self::generateConstructor($type['attributes']);
+
+        // Generate getClass method
+        $getClass = self::generateGetClassMethod($className);
+
+        // Add to methods the generated overridden query method
+        $methods .= self::generateQueryMethod();
+
+        // Generate user query attributes
+        $queryAttributes = self::generateQueryAttributes($type['attributes']);
+
+        // Generate template
+        $template = "<?php\n\nnamespace " . self::getModelsPath(true, false, false) . ";\n\nuse app\helpers\GraphModelType;\n\nclass $className extends GraphModelType { $attributes\n$methods\n$constructor\n$getClass\n}\n\nclass ${className}QueryAttributes {\n$queryAttributes}";
+
+        // Save model
+        file_put_contents(Yii::getAlias('@app/models/graphql/' . $className . '.php'), $template);
+
+    }
+
+    /**
+     * Generate attributes with relative documentations
+     * @param $inputAttributes
+     * @return string
+     */
+    private static function generateAttributes($inputAttributes) {
+
+        $attributes = '';
+
+        // Attributes generator loop
+        foreach ($inputAttributes as $attribute) {
+
+            // Check if attribute is required
+            $required = '';
+            if($attribute['required']) {
+                $required = "\n\t * @required This attribute is required for mutations";
+            }
+
+            // Save attribute
+            $documentation = "\t/**\n\t * @var ${attribute['type']}" . ($attribute['isArray'] ? '[]' : '') . "$required\n\t */";
+            $attributes .= "\n\n$documentation\n\t${attribute['visibility']} $${attribute['name']};";
+        }
+
+        return $attributes;
+    }
+
+    /**
+     * Generate all methods for all attributes
+     * @param $inputAttributes
+     * @return string
+     */
+    private static function generateMethods($inputAttributes) {
+
+        $methods = '';
+
+        // Methods generator loop
+        foreach ($inputAttributes as $attribute) {
 
             // Check if type is standard or GraphModelType
             $isGraphModelType = self::isGraphModelType($attribute['type']);
-
-            // Generate documentation and attribute
-            $required = '';
-            if($attribute['required']) {
-                $required = "\n\t * @required";
-            }
-            $documentation = "\t/**\n\t * @var ${attribute['type']}" . ($attribute['isArray'] ? '[]' : '') . "$required\n\t */";
-            $attributes .= "\n\n$documentation\n\t${attribute['visibility']} $${attribute['name']};";
-
 
             // Generate getter and setter methods for all attributes
             $methods .= "\n\n\tpublic function ${attribute['name']}() {\n\t\tparent::requestAttribute('${attribute['name']}', '${attribute['type']}');\n\t\treturn \$this->${attribute['name']};\n\t}"; // Getter
@@ -182,6 +229,23 @@ class GraphDatabaseAccessLayer
             if($isGraphModelType) {
                 $methods .= "\n\n\tpublic function get" . ucfirst($attribute['name']) . "Class() { return ${attribute['type']}::getClass(); }";
             }
+        }
+
+        return $methods;
+
+    }
+
+    private static function generateConstructor($inputAttributes) {
+
+        $constructorParams = '';
+        $constructorDirectives = '';
+        $constructorParamsCount = 0;
+
+        // Generator loop
+        foreach ($inputAttributes as $attribute) {
+
+            // Check if type is standard or GraphModelType
+            $isGraphModelType = self::isGraphModelType($attribute['type']);
 
             // Check if is a standard type
             if(!$isGraphModelType) {
@@ -207,26 +271,20 @@ class GraphDatabaseAccessLayer
             $constructorParams = substr($constructorParams, 0, strlen($constructorParams) - 2);
         }
 
-        // Generate constructor and newEntity methods
-        $constructor = "\n\tpublic function __construct($constructorParams) { $constructorDirectives\n\t}";
-        //$paramsValues = str_repeat('null, ', $constructorParamsCount);
-        //$newEntity = "\n\tpublic static function newEntity() { return new self(" . ($constructorParamsCount > 0 ? substr($paramsValues, 0, strlen($paramsValues) - 2) : $paramsValues) . "); }";
+        return "\n\tpublic function __construct($constructorParams) { $constructorDirectives\n\t}";
+    }
 
-        // Generate getClass method
-        $getClass = "\n\tpublic static function getClass() { return '$className'; }";
+    /**
+     * Generate a method used to get class name
+     * @param $className String
+     * @return string
+     */
+    private static function generateGetClassMethod($className) {
+        return "\n\tpublic static function getClass() { return '$className'; }";
+    }
 
-        // Generate overridden query method
-        $methods .= "\n\n\tpublic static function query(\$attributes, \$callback) {\n\t\treturn parent::executeQuery(self::getClass(), \$callback);\n\t}";
-
-        // Generate user query attributes
-        $queryAttributes = self::generateQueryAttributes($type['attributes']);
-
-        // Generate template
-        $template = "<?php\n\nnamespace " . self::getModelsPath(true, false, false) . ";\n\nuse app\helpers\GraphModelType;\n\nclass $className extends GraphModelType { $attributes\n$methods\n$constructor\n$getClass\n}\n\nclass ${className}QueryAttributes {\n$queryAttributes}";
-
-        // Save model
-        file_put_contents(Yii::getAlias('@app/models/graphql/' . $className . '.php'), $template);
-
+    private static function generateQueryMethod() {
+        return "\n\n\tpublic static function query(\$attributes, \$callback) {\n\t\treturn parent::executeQuery(self::getClass(), \$callback);\n\t}";
     }
 
     /**
