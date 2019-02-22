@@ -7,8 +7,11 @@ use GuzzleHttp;
 use GraphAware\Neo4j\Client\ClientBuilder;
 use yii\helpers\FileHelper;
 use yii\helpers\Json;
-use Exception;
 
+/**
+ * Class GraphDatabaseAccessLayer. This is the layer to use to communicate with a graphql neo4j database
+ * @package app\helpers
+ */
 class GraphDatabaseAccessLayer
 {
 
@@ -20,6 +23,27 @@ class GraphDatabaseAccessLayer
     public static function buildSchema($graphqlSchema) {
         self::updateDatabaseGraph($graphqlSchema);
         self::buildSchemaModels($graphqlSchema);
+    }
+
+    /**
+     * Use this function to update graphql graph in database with provided graphql schema
+     * @param $graphqlSchema String
+     */
+    private static function updateDatabaseGraph($graphqlSchema) {
+
+        // Create a client to perform connection and set schema
+        $client = ClientBuilder::create()
+            ->addConnection('bolt', 'bolt://' . Yii::$app->params['db_username'] . ':' . Yii::$app->params['db_password'] . '@localhost:7687')
+            ->build();
+
+        // Load schema
+        $schema = file_get_contents(Yii::getAlias("@app/models/$graphqlSchema"));
+
+        // Deploy schema to database
+        $query = "CALL graphql.idl('$schema')";
+
+        $client->run($query);
+
     }
 
     /**
@@ -54,7 +78,7 @@ class GraphDatabaseAccessLayer
 
     /**
      * Extract types from provided schema
-     * @param $schema
+     * @param $schema String Schema provided from a .graphql file
      * @return array
      */
     private static function extractTypes($schema) {
@@ -96,7 +120,7 @@ class GraphDatabaseAccessLayer
                         'type' => self::typeConversion(str_replace('!', '', $paramParts[1]), true), // Remove required field: !
                         'isArray' => substr($paramParts[1], 0, 1) == '[',
                         'required' => substr($paramParts[1], -1) == '!',
-                        'visibility' => 'protected', // TODO this can be extended in future
+                        'visibility' => 'protected',
                     ];
 
                 }
@@ -119,16 +143,11 @@ class GraphDatabaseAccessLayer
         return $types;
     }
 
-    /*private static function extractTypeNames($types) {
-        $allTypeNames = [];
-
-        foreach ($types as $type) {
-            $allTypeNames[] = $type['className'];
-        }
-
-        return $allTypeNames;
-    }*/
-
+    /**
+     * Create a single model php file used to interact with database
+     * @param $type mixed
+     */
+    // TODO improve this method
     private static function createModel($type) {
 
         // Get className
@@ -156,10 +175,6 @@ class GraphDatabaseAccessLayer
 
 
             // Generate getter and setter methods for all attributes
-            /*$graphModelTypeExtension = '';
-            if($isGraphModelType) {
-                $graphModelTypeExtension = "\$this->isQuery && \$this->${attribute['name']} == null ? [new ${attribute['type']}()] : ";
-            }*/
             $methods .= "\n\n\tpublic function ${attribute['name']}() {\n\t\tparent::requestAttribute('${attribute['name']}', '${attribute['type']}');\n\t\treturn \$this->${attribute['name']};\n\t}"; // Getter
             $methods .= "\n\n\tpublic function set" . ucfirst($attribute['name']) . "($${attribute['name']}) {\n\t\t\$this->${attribute['name']} = $${attribute['name']};\n\t}"; // Setter
 
@@ -214,22 +229,40 @@ class GraphDatabaseAccessLayer
 
     }
 
+    /**
+     * Generate query attributes to use when user wants specific query constraints
+     * @param $attributes array Attributes of particular model
+     * @return string Attributes list as string
+     */
     private static function generateQueryAttributes($attributes) {
 
         $queryAttributes = '';
 
+        // Generation loop
         foreach ($attributes as $attribute) {
             $queryAttributes .= "\tconst ${attribute['name']} = '${attribute['name']}';\n";
         }
 
+        // Return attributes
         return $queryAttributes;
 
     }
 
+    /**
+     * Check if provided type is child of GraphModelType: if it's a webmaster defined type
+     * @param $type String Class name of type you want to check
+     * @return bool
+     */
     public static function isGraphModelType($type) {
         return is_subclass_of(self::getModelsPath(true) . $type, 'app\helpers\GraphModelType');
     }
 
+    /**
+     * Converts a specific graphql type in a standard language defined type
+     * @param $type String GraphQL input type
+     * @param bool $ignoreArray Set true if you want to ignore characters like '[' and ']'
+     * @return string
+     */
     private static function typeConversion($type, $ignoreArray = false) {
 
         $isArray = false;
@@ -245,66 +278,25 @@ class GraphDatabaseAccessLayer
 
     }
 
+    /**
+     * Check if provided type is an array of types or single type
+     * @param $type String GraphQL type
+     * @return bool
+     */
     private static function isArray($type) {
         return substr($type, 0, 1) == '[';
     }
 
     /**
-     * Use this function to update graphql graph in database with provided graphql schema
-     * @param $graphqlSchema String
-     */
-    private static function updateDatabaseGraph($graphqlSchema) {
-
-        // Create a client to perform connection and set schema
-        $client = ClientBuilder::create()
-            ->addConnection('bolt', 'bolt://' . Yii::$app->params['db_username'] . ':' . Yii::$app->params['db_password'] . '@localhost:7687')
-            ->build();
-
-        // Load schema
-        $schema = file_get_contents(Yii::getAlias("@app/models/$graphqlSchema"));
-
-        // Deploy schema to database
-        $query = "CALL graphql.idl('$schema')";
-
-        $client->run($query);
-
-    }
-
-    /**
-     * @deprecated
-     * @param $queryClasses String[] Main classes on which execute query. Example: Movie, Person, Tweet...
-     * @return Queries Queries object
-     */
-    public static function queries($queryClasses) {
-
-        $queries = [];
-
-        // Build query objects
-        foreach ($queryClasses as $class) {
-            $queries[$class] = self::query($class);
-        }
-
-        // Return queries
-        return new Queries($queries);
-
-    }
-
-    /**
-     * @param $callback
-     * @return Query
-     */
-    public static function query($callback) {
-        // Build and return single query object
-        return new Query($callback);
-    }
-
-    /**
+     * Execute GraphQL query
      * @param $gql String GraphQL query
      * @return GraphModelType[]
      * @throws \GuzzleHttp\Exception\GuzzleException
      * @throws GraphDatabaseAccessLayerException
      */
     public static function doQuery($gql) {
+
+        // Make an HTTP request to endpoint
         $client = new GuzzleHttp\Client();
         $res = $client->request('POST', Yii::$app->params['api_endpoint'], [
             'headers' => [
@@ -317,6 +309,7 @@ class GraphDatabaseAccessLayer
             ],
         ]);
 
+        // Get response
         $response = Json::decode($res->getBody()->getContents());
 
         // Check if has failed
@@ -326,12 +319,19 @@ class GraphDatabaseAccessLayer
 
         // Result values
         return self::json2Object($response['data']);
+
     }
 
+    /**
+     * Convert GraphQL json response to language objects instances
+     * @param $json mixed GraphQL json data
+     * @return array|mixed
+     */
     private static function json2Object($json) {
 
         $result = [];
 
+        // Walking through json data
         foreach ($json as $modelName => $instances) {
 
             // Check if is single object or an array of objects
@@ -349,6 +349,12 @@ class GraphDatabaseAccessLayer
 
     }
 
+    /**
+     * Create model from json input data
+     * @param $modelName String
+     * @param $params array Parameters of specified model
+     * @return mixed
+     */
     private static function createModelFromJson($modelName, $params) {
 
         // Create new model from class name
@@ -384,10 +390,16 @@ class GraphDatabaseAccessLayer
         // TODO
     }
 
+    /**
+     * Get models path in project
+     * @param $isGraphQLModel bool
+     * @param bool $forwardSlash
+     * @param bool $finalSlash
+     * @return bool|string
+     */
     public static function getModelsPath($isGraphQLModel, $forwardSlash = false, $finalSlash = true) {
 
-        $absPath = '';
-
+        // Get proper string basing on input parameters
         if($isGraphQLModel) {
             $absPath = !$forwardSlash ? 'app\models\graphql\\' : 'app/models/graphql/';
         } else {
@@ -399,68 +411,8 @@ class GraphDatabaseAccessLayer
             $absPath = substr($absPath, 0, strlen($absPath) - 1);
         }
 
+        // Return path
         return $absPath;
     }
 
-}
-
-// Queries class on which execute queries operations
-class Queries {
-
-    public function __construct($queries) {
-
-    }
-
-    public function executeQuery() {
-        // TODO merge query in one single query request
-    }
-
-}
-
-// Query class on which execute query operations
-class Query {
-
-    private $callback;
-
-    public function __construct($callback) {
-        $this->callback = $callback;
-    }
-
-    public function buildQuery() {
-        $query = Yii::$app->security->generateRandomString(10);
-        // TODO build query here
-        return $query;
-    }
-
-    /**
-     * @throws GraphDatabaseAccessLayerException
-     * @throws GuzzleHttp\Exception\GuzzleException
-     * @return mixed
-     */
-    public function execute() {
-
-        $callback = $this->callback;
-
-        // First execute callback to discover which fields need to be fetched
-        return $callback();
-
-        //GraphDatabaseAccessLayer::doQuery(self::buildQuery());
-
-        // Execute final callback
-        //return $callback('test');
-
-        //TODO
-    }
-
-}
-
-class GraphDatabaseAccessLayerException extends Exception {
-
-    public function __construct($message, $code = 0, Exception $previous = null) {
-        parent::__construct($message, $code, $previous);
-    }
-
-    public function __toString() {
-        return __CLASS__ . ": [{$this->code}]: {$this->message}\n";
-    }
 }

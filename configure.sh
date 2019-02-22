@@ -45,6 +45,7 @@ do
 		sudo -u $SUDO_USER -H sh -c "mkdir $APPNAME/helpers"
 		sudo -u $SUDO_USER -H sh -c "cp GraphDatabaseAccessLayer.php $APPNAME/helpers/GraphDatabaseAccessLayer.php"
 		sudo -u $SUDO_USER -H sh -c "cp GraphModelType.php $APPNAME/helpers/GraphModelType.php"
+		sudo -u $SUDO_USER -H sh -c "cp GraphDatabaseAccessLayerException.php $APPNAME/helpers/GraphDatabaseAccessLayerException.php"
 		sudo -u $SUDO_USER -H sh -c "touch $APPNAME/models/Models.graphql"
 		cd $APPNAME
 		sudo -u $SUDO_USER -H sh -c "composer require guzzlehttp/guzzle graphaware/neo4j-php-client:^4.0"

@@ -186,6 +186,7 @@ And execute this script:
 $ mkdir <app-name>/helpers
 $ cp GraphDatabaseAccessLayer.php <app-name>/helpers/GraphDatabaseAccessLayer.php
 $ cp GraphModelType.php <app-name>/helpers/GraphModelType.php
+$ cp GraphDatabaseAccessLayerException.php <app-name>/helpers/GraphDatabaseAccessLayerException.php
 $ cd <app-name>
 $ touch <app-name>/models/Models.graphql
 $ composer require guzzlehttp/guzzle graphaware/neo4j-php-client:^4.0
