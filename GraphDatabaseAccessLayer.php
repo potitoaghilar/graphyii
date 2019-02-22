@@ -2,7 +2,6 @@
 
 namespace app\helpers;
 
-use phpDocumentor\Reflection\Types\String_;
 use Yii;
 use GuzzleHttp;
 use GraphAware\Neo4j\Client\ClientBuilder;
