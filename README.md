@@ -76,7 +76,7 @@ class SiteController extends Controller {
 
 ```
 
-#### Dependecies
+### Dependecies
 Install required dependencies:
 ```sh
 $ sudo dnf install composer
