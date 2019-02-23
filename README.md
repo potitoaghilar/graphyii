@@ -31,7 +31,7 @@ class SiteController extends Controller {
     public function actionMyGraph() {
 
         // Build models with a provided GraphQL schema
-        GDAL::buildSchemaModels('Models.graphql');
+        GDAL::buildSchema('Models.graphql');
 
         // Entry point for our query
         $users = User::query([
