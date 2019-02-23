@@ -70,10 +70,12 @@ abstract class GraphModelType {
 
         // Build requested attributes
         foreach ($requestedAttributes as $key => $attribute) {
+
+            $query .= $key . ',';
+
+            // If is a non standard type
             if(GraphDatabaseAccessLayer::isGraphModelType($attribute['type'])) {
                 $query .= self::buildQuery($key, $requestedAttributes[$key]['value']) . ',';
-            } else {
-                $query .= $key . ',';
             }
         }
 

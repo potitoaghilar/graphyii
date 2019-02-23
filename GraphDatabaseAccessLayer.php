@@ -62,7 +62,7 @@ class GraphDatabaseAccessLayer
         $types = self::extractTypes($schema);
 
         // Create path if not exists
-        FileHelper::createDirectory($modelsPath . 'graphql', $mode = 0775, $recursive = true);
+        FileHelper::createDirectory($modelsPath . 'graphql');
 
         // Create model classes
         foreach ($types as $type) {
@@ -236,9 +236,9 @@ class GraphDatabaseAccessLayer
 
     private static function generateConstructor($inputAttributes) {
 
-        $constructorParams = '';
-        $constructorDirectives = '';
-        $constructorParamsCount = 0;
+        $params = '';
+        $directives = '';
+        $paramsCount = 0;
 
         // Generator loop
         foreach ($inputAttributes as $attribute) {
@@ -249,28 +249,22 @@ class GraphDatabaseAccessLayer
             // Check if is a standard type
             if(!$isGraphModelType) {
 
-                /*// Check if required
-                $nullValue = '';
-                if(!$attribute['required']) {
-                    $nullValue = ' = null';
-                }*/
-
                 // Adds parameters and directives to constructor
-                $constructorParams .= "\$${attribute['name']} = null, ";
-                $constructorDirectives .= "\n\t\t\$this->${attribute['name']} = $${attribute['name']};";
+                $params .= "\$${attribute['name']} = null, ";
+                $directives .= "\n\t\t\$this->${attribute['name']} = $${attribute['name']};";
 
-                $constructorParamsCount++;
+                $paramsCount++;
 
             }
 
         }
 
         // Remove trailing characters from parameters
-        if($constructorParamsCount > 0) {
-            $constructorParams = substr($constructorParams, 0, strlen($constructorParams) - 2);
+        if($paramsCount > 0) {
+            $params = substr($params, 0, strlen($params) - 2);
         }
 
-        return "\n\tpublic function __construct($constructorParams) { $constructorDirectives\n\t}";
+        return "\n\tpublic function __construct($params) { $directives\n\t}";
     }
 
     /**
@@ -297,7 +291,7 @@ class GraphDatabaseAccessLayer
 
         // Generation loop
         foreach ($attributes as $attribute) {
-            $queryAttributes .= "\tconst ${attribute['name']} = '${attribute['name']}';\n";
+            $queryAttributes .= "\tconst " . $attribute['name']. " = '" . $attribute['name'] . "';\n";
         }
 
         // Return attributes
@@ -331,7 +325,7 @@ class GraphDatabaseAccessLayer
         }
 
         // Do conversion
-        return str_replace(['Long', 'ID'], ['int', 'int'], $type) . ($isArray && !$ignoreArray ? '[]' : '');
+        return str_replace(['Long', 'ID'], ['int', 'mixed'], $type) . ($isArray && !$ignoreArray ? '[]' : '');
 
     }
 
@@ -457,9 +451,8 @@ class GraphDatabaseAccessLayer
     public static function getModelsPath($isGraphQLModel, $forwardSlash = false, $finalSlash = true) {
 
         // Get proper string basing on input parameters
-        if($isGraphQLModel) {
-            $absPath = !$forwardSlash ? 'app\models\graphql\\' : 'app/models/graphql/';
-        } else {
+        $absPath = !$forwardSlash ? 'app\models\graphql\\' : 'app/models/graphql/';
+        if(!$isGraphQLModel) {
             $absPath = !$forwardSlash ? 'app\models\\' : 'app/models/';
         }
 
