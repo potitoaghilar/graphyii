@@ -1,6 +1,6 @@
 # GraphYii
 
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/952fc83ca44f4cdc97c83323c73e5561)](https://app.codacy.com/app/aghilarn/graphyii?utm_source=github.com&utm_medium=referral&utm_content=potitoaghilar/graphyii&utm_campaign=Badge_Grade_Dashboard)
+[![version](https://img.shields.io/badge/version-0.1%20alpha-orange.svg)](https://img.shields.io/badge/version-0.1%20alpha-orange.svg) [![Codacy Badge](https://api.codacy.com/project/badge/Grade/952fc83ca44f4cdc97c83323c73e5561)](https://app.codacy.com/app/aghilarn/graphyii?utm_source=github.com&utm_medium=referral&utm_content=potitoaghilar/graphyii&utm_campaign=Badge_Grade_Dashboard) [![HitCount](http://hits.dwyl.io/aghilarn/graphyii.svg)](http://hits.dwyl.io/aghilarn/graphyii) [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 Use this stack to create powerful web application or any kind of API with Yii2 framework and a Neo4j graph database. This stack mixes many technologies like
  - Yii2 (PHP Framework)
@@ -76,7 +76,7 @@ class SiteController extends Controller {
 
 ```
 
-#### Dependecies
+### Dependecies
 Install required dependencies:
 ```sh
 $ sudo dnf install composer
