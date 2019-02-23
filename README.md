@@ -1,4 +1,7 @@
 # GraphYii
+
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/952fc83ca44f4cdc97c83323c73e5561)](https://app.codacy.com/app/aghilarn/graphyii?utm_source=github.com&utm_medium=referral&utm_content=potitoaghilar/graphyii&utm_campaign=Badge_Grade_Dashboard)
+
 Use this stack to create powerful web application or any kind of API with Yii2 framework and a Neo4j graph database. This stack mixes many technologies like
  - Yii2 (PHP Framework)
  - Neo4j (Database Solution)
